@@ -18,4 +18,24 @@ int main()
             buffer.size(),
             sa_ShaderType_Pixel
         });
+
+	char* isa = sa_spirVShaderISA(sa_SpirVShaderDesc
+	                  {
+						  buffer.data(),
+						  buffer.size(),
+						  sa_ShaderType_Pixel
+					  });
+
+    printf("%s", isa);
+    sa_free(isa);
+
+    char* registerAnalysis = sa_spirVShaderRegisterAnalysis(sa_SpirVShaderDesc
+	                  {
+						  buffer.data(),
+						  buffer.size(),
+						  sa_ShaderType_Pixel
+					  });
+
+    printf("%s", registerAnalysis);
+    sa_free(registerAnalysis);
 }

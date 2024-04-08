@@ -1,6 +1,10 @@
 #ifndef SHADER_ANALYZER_H
 #define SHADER_ANALYZER_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif // __cplusplus
+
 enum
 {
     sa_ShaderType_Vertex = 0,
@@ -24,6 +28,13 @@ typedef struct
 
 void sa_setRGAPath(char const* rgaPath);
 sa_ShaderStats sa_spirVShaderStatistics(sa_SpirVShaderDesc desc);
+char* sa_spirVShaderISA(sa_SpirVShaderDesc desc);
+char* sa_spirVShaderRegisterAnalysis(sa_SpirVShaderDesc desc);
+void sa_free(void* data);
+
+#ifdef __cplusplus
+} // extern "C"
+#endif // __cplusplus
 
 #endif // SHADER_ANALYZER_H
 
@@ -64,33 +75,34 @@ static HANDLE win32RunProcess(std::string const& commandLine)
 }
 
 static char const* RGAPath = "rga/rga.exe";
+static char const* const TempSpirvFilePath = "temp/temp_shader.spv";
+static char const* GPU = "gfx1030";
+
+static char const* const ShaderNames[sa_ShaderType_Count] =
+{
+	"vert",
+	"frag",
+	"comp"
+};
 
 void sa_setRGAPath(char const* rgaPath)
 {
     RGAPath = rgaPath;
 }
 
-sa_ShaderStats sa_spirVShaderStatistics(sa_SpirVShaderDesc desc)
+static void runRGA(sa_SpirVShaderDesc desc, char const* analysisCommand)
 {
-    // Prep filesystem
+	// Prep filesystem
     {
         std::error_code errorCode;
         std::filesystem::create_directory("temp", errorCode);
     }
 
-    char const* shaderNames[sa_ShaderType_Count] =
-    {
-        "vert",
-        "frag",
-        "comp"
-    };
-    char const* shaderName = shaderNames[desc.Type];
+    char const* shaderName = ShaderNames[desc.Type];
 
-    char const* gpu = "gfx1030";
-    char const* spirvFilePath = "temp/temp_shader.spv";
     // Write out our temp file
     {
-        std::ofstream spirvFile{spirvFilePath, std::ios::binary};
+        std::ofstream spirvFile{TempSpirvFilePath, std::ios::binary};
         spirvFile.write(desc.Binary, desc.BinarySize);
         spirvFile.close();
     }
@@ -100,24 +112,37 @@ sa_ShaderStats sa_spirVShaderStatistics(sa_SpirVShaderDesc desc)
         std::stringstream processCommandLine;
         processCommandLine << RGAPath << " ";
         processCommandLine << "-s vk-offline ";
-        processCommandLine << "-c " << gpu << " ";
-        processCommandLine << "-a temp/temp_analysis.txt ";
-        processCommandLine << "--" << shaderName << " " << spirvFilePath << " ";
+        processCommandLine << "-c " << GPU << " ";
+		processCommandLine << analysisCommand << " ";
+        processCommandLine << "--" << shaderName << " " << TempSpirvFilePath << " ";
 
         HANDLE process = win32RunProcess(processCommandLine.str());
         WaitForSingleObject(process, INFINITE);
     }
+}
+
+static void rgaEpilogue()
+{
+	std::remove(TempSpirvFilePath);
+
+	std::error_code errorCode;
+	std::filesystem::remove("temp", errorCode);
+}
+
+sa_ShaderStats sa_spirVShaderStatistics(sa_SpirVShaderDesc desc)
+{
+	runRGA(desc, "-a temp/temp_analysis.txt");
 
     // Read analysis file i.e CSV for dummies
     sa_ShaderStats stats = {};
 
     std::stringstream analysisFileName;
-    {
-        analysisFileName << "temp/" << gpu << "_temp_analysis_" << shaderName << ".txt";
+	analysisFileName << "temp/" << GPU << "_temp_analysis_" << ShaderNames[desc.Type] << ".txt";
 
+    {
         std::ifstream analysisFile{analysisFileName.str()};
 
-        // Just find our the column of our VGPR count
+        // Just find out the column of our VGPR count
         std::string out;
         int column = 0;
         for(; std::getline(analysisFile, out, ',') && out != "USED_VGPRs"; column++)
@@ -139,18 +164,69 @@ sa_ShaderStats sa_spirVShaderStatistics(sa_SpirVShaderDesc desc)
 
         stats.VGPRCount = atoi(vgprCount.c_str());
     }
-    
-
-    // Delete our temp file
-    {
-        std::remove(analysisFileName.str().c_str());
-        std::remove(spirvFilePath);
-
-        std::error_code errorCode;
-        std::filesystem::remove("temp", errorCode);
-    }
+   
+    // Delete our analysis file
+	std::remove(analysisFileName.str().c_str());
+	rgaEpilogue();
 
     return stats;
+}
+
+char* sa_spirVShaderISA(sa_SpirVShaderDesc desc)
+{
+	runRGA(desc, "--isa temp/temp_isa.txt");
+
+	std::stringstream analysisFileName;
+	analysisFileName << "temp/" << GPU << "_temp_isa_" << ShaderNames[desc.Type] << ".txt";
+	
+    char* output;
+    {
+        std::ifstream analysisFile{analysisFileName.str(), std::ifstream::binary};
+
+	    analysisFile.seekg(0, std::ios::end);
+	    size_t fileSize = analysisFile.tellg();
+	    analysisFile.seekg(0, std::ios::beg);
+	
+	    output = reinterpret_cast<char*>(malloc(fileSize + 1));
+	    analysisFile.read(output, fileSize);
+        output[fileSize] = 0;
+    }
+
+	std::remove(analysisFileName.str().c_str());
+	rgaEpilogue();
+
+	return output;
+}
+
+char* sa_spirVShaderRegisterAnalysis(sa_SpirVShaderDesc desc)
+{
+	runRGA(desc, "--livereg temp/temp_register_analysis.txt");
+
+	std::stringstream analysisFileName;
+	analysisFileName << "temp/" << GPU << "_temp_register_analysis_" << ShaderNames[desc.Type] << ".txt";
+	
+    char* output;
+    {
+        std::ifstream analysisFile{analysisFileName.str(), std::ifstream::binary};
+
+	    analysisFile.seekg(0, std::ios::end);
+	    size_t fileSize = analysisFile.tellg();
+	    analysisFile.seekg(0, std::ios::beg);
+	
+	    output = reinterpret_cast<char*>(malloc(fileSize + 1));
+	    analysisFile.read(output, fileSize);
+        output[fileSize] = 0;
+    }
+
+	std::remove(analysisFileName.str().c_str());
+	rgaEpilogue();
+
+	return output;
+}
+
+void sa_free(void* data)
+{
+    free(data);
 }
 
 #endif // SHADER_ANALYZER_IMPL_H
