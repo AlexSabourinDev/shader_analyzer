@@ -10,7 +10,7 @@ int main()
         std::ifstream spirvFile{"sample_brdf.spv", std::ios::binary};
         buffer= std::vector<char>{std::istreambuf_iterator<char>(spirvFile), {}};
     }
-    sa_setRGAPath("../rga/rga.exe");
+    sa_setRGAPath("../rga/");
     sa_ShaderOutput output = sa_spirVShaderOutput(
         sa_SpirVShaderDesc
         {

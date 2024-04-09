@@ -60,13 +60,16 @@ void sa_freeShaderOutput(sa_ShaderOutput output);
 #include <fstream>
 #include <filesystem>
 #include <Windows.h>
-static HANDLE win32RunProcess(std::string const& commandLine)
+static void win32RunProcess(std::string const& commandLine, HANDLE outputStream = NULL)
 {
-    std::string tempStorage = commandLine;
+	std::string tempStorage = commandLine;
 
     PROCESS_INFORMATION processInformation{};
     STARTUPINFOA startupInfo{};
     startupInfo.cb = sizeof(startupInfo);
+	startupInfo.hStdOutput = outputStream;
+	startupInfo.dwFlags |= STARTF_USESTDHANDLES;
+
     // The target process will be created in session of the
     // provider host process. If the provider was hosted in
     // wmiprvse.exe process, the target process will be launched
@@ -77,19 +80,24 @@ static HANDLE win32RunProcess(std::string const& commandLine)
         &tempStorage[0],        // Command line
         NULL,                   // Process handle not inheritable
         NULL,                   // Thread handle not inheritable
-        FALSE,                  // Set handle inheritance to FALSE
+        TRUE,                  // Set handle inheritance to FALSE
         NORMAL_PRIORITY_CLASS | CREATE_NO_WINDOW,  // creation flags
         NULL,                   // Use parent's environment block
         NULL,                   // Use parent's starting directory 
         &startupInfo,           // Pointer to STARTUPINFO structure
-        &processInformation);   // Pointer to PROCESS_INFORMATION structure
+		&processInformation);   // Pointer to PROCESS_INFORMATION structure
 
-    return creationResult == TRUE ? processInformation.hProcess : NULL;
+	if (creationResult == TRUE)
+	{
+		WaitForSingleObject(processInformation.hProcess, INFINITE);
+		CloseHandle(processInformation.hProcess);
+	}
 }
 
 static char const* RGAPath = "rga/rga.exe";
 static char const* const TempSpirvFilePath = "temp/temp_shader.spv";
-static char const* GPU = "gfx1030";
+static char const* const GPU = "gfx1030";
+static char const* const AMDLLPCGPU = "10.3.0";
 
 static char const* const ShaderNames[sa_ShaderType_Count] =
 {
@@ -123,18 +131,13 @@ sa_ShaderOutput sa_spirVShaderOutput(sa_SpirVShaderDesc desc, sa_ShaderOutputTyp
     // Run RGA
     {
         std::stringstream processCommandLine;
-        processCommandLine << RGAPath << " ";
+        processCommandLine << RGAPath << "rga.exe ";
         processCommandLine << "-s vk-offline ";
         processCommandLine << "-c " << GPU << " ";
 
 		if ((outputType & sa_ShaderOutputType_Stats) != 0)
 		{
 			processCommandLine << "-a temp/temp_analysis.txt ";
-		}
-
-		if ((outputType & sa_ShaderOutputType_ISA) != 0)
-		{
-			processCommandLine << "--isa temp/temp_isa.txt ";
 		}
 
 		if ((outputType & sa_ShaderOutputType_RegisterAnalysis) != 0)
@@ -144,8 +147,7 @@ sa_ShaderOutput sa_spirVShaderOutput(sa_SpirVShaderDesc desc, sa_ShaderOutputTyp
 
         processCommandLine << "--" << shaderName << " " << TempSpirvFilePath << " ";
 
-        HANDLE process = win32RunProcess(processCommandLine.str());
-        WaitForSingleObject(process, INFINITE);
+        win32RunProcess(processCommandLine.str());
     }
 
 	sa_ShaderOutput output = {};
@@ -190,11 +192,46 @@ sa_ShaderOutput sa_spirVShaderOutput(sa_SpirVShaderDesc desc, sa_ShaderOutputTyp
 
 	if ((outputType & sa_ShaderOutputType_ISA) != 0)
 	{
-		std::stringstream isaFileName;
-		isaFileName << "temp/" << GPU << "_temp_isa_" << shaderName << ".txt";
+		char const* const tempCompilationBinaryPath = "temp/temp.bin";
+		std::stringstream amdllpcCommandLine;
+		amdllpcCommandLine << RGAPath << "utils/amdllpc.exe ";
+		amdllpcCommandLine << "-v ";
+		amdllpcCommandLine << "--include-llvm-ir ";
+		amdllpcCommandLine << "--auto-layout-desc ";
+		amdllpcCommandLine << "-o=\"" << tempCompilationBinaryPath << "\" ";
+		amdllpcCommandLine << "--gfxip=" << AMDLLPCGPU << " ";
+		amdllpcCommandLine << "-trim-debug-info=false ";
+		amdllpcCommandLine << TempSpirvFilePath << " ";
+		win32RunProcess(amdllpcCommandLine.str());
+
+		SECURITY_ATTRIBUTES securityAttributes = {};
+		securityAttributes.nLength = sizeof(SECURITY_ATTRIBUTES);
+		securityAttributes.lpSecurityDescriptor = NULL;
+		securityAttributes.bInheritHandle = TRUE;
+
+		char const* const tempLLVMObjDumpOutputPath = "temp/temp_dissassembly.txt";
+		HANDLE disassemblyOutput = CreateFileA(tempLLVMObjDumpOutputPath,
+		                         FILE_APPEND_DATA,
+		                         FILE_SHARE_WRITE | FILE_SHARE_READ,
+		                          &securityAttributes,
+		                         CREATE_ALWAYS,
+		                         FILE_ATTRIBUTE_NORMAL,
+		                         NULL);
+
+		std::stringstream llvmObjDumpCommandLine;
+		llvmObjDumpCommandLine << "\"" << RGAPath << "utils/lc/opencl/bin/llvm-objdump.exe" << "\" ";
+		llvmObjDumpCommandLine << "--disassemble ";
+		llvmObjDumpCommandLine << "--symbolize-operands ";
+		llvmObjDumpCommandLine << "--line-numbers ";
+		llvmObjDumpCommandLine << "--source ";
+		llvmObjDumpCommandLine << "--triple=amdgcn--amdpal ";
+		llvmObjDumpCommandLine << "--mcpu=" << GPU << " ";
+		llvmObjDumpCommandLine << "\"" << tempCompilationBinaryPath << "\" ";
+		win32RunProcess(llvmObjDumpCommandLine.str(), disassemblyOutput);
+		CloseHandle(disassemblyOutput);
 
 		{
-			std::ifstream isaFile { isaFileName.str(), std::ifstream::binary };
+			std::ifstream isaFile { tempLLVMObjDumpOutputPath, std::ifstream::binary };
 
 			isaFile.seekg(0, std::ios::end);
 			size_t fileSize = isaFile.tellg();
@@ -205,7 +242,8 @@ sa_ShaderOutput sa_spirVShaderOutput(sa_SpirVShaderDesc desc, sa_ShaderOutputTyp
 			output.ISA[fileSize] = 0;
 		}
 
-		std::remove(isaFileName.str().c_str());
+		std::remove(tempCompilationBinaryPath);
+		std::remove(tempLLVMObjDumpOutputPath);
 	}
 
 	if ((outputType & sa_ShaderOutputType_RegisterAnalysis) != 0)
