@@ -5,45 +5,45 @@
 extern "C" {
 #endif // __cplusplus
 
-enum
-{
-    sa_ShaderType_Vertex = 0,
-    sa_ShaderType_Pixel,
-    sa_ShaderType_Compute,
-    sa_ShaderType_Count
-};
-typedef unsigned int sa_ShaderType;
+	enum
+	{
+		sa_ShaderType_Vertex = 0,
+		sa_ShaderType_Pixel,
+		sa_ShaderType_Compute,
+		sa_ShaderType_Count
+	};
+	typedef unsigned int sa_ShaderType;
 
-typedef struct
-{
-    char const* Binary;
-    size_t BinarySize;
-    sa_ShaderType Type;
-} sa_SpirVShaderDesc;
+	typedef struct
+	{
+		char const* Binary;
+		size_t BinarySize;
+		sa_ShaderType Type;
+	} sa_SpirVShaderDesc;
 
-typedef struct
-{
-    int VGPRCount;
-} sa_ShaderStats;
+	typedef struct
+	{
+		int VGPRCount;
+	} sa_ShaderStats;
 
-enum
-{
-	sa_ShaderOutputType_Stats = 0x01,
-	sa_ShaderOutputType_ISA = 0x02,
-	sa_ShaderOutputType_RegisterAnalysis = 0x04,
-};
-typedef unsigned int sa_ShaderOutputType;
+	enum
+	{
+		sa_ShaderOutputType_Stats = 0x01,
+		sa_ShaderOutputType_ISA = 0x02,
+		sa_ShaderOutputType_RegisterAnalysis = 0x04,
+	};
+	typedef unsigned int sa_ShaderOutputType;
 
-typedef struct // Written to depending on sa_ShaderOutput
-{
-	sa_ShaderStats Stats;
-	char* ISA;
-	char* RegisterAnalysis;
-} sa_ShaderOutput;
+	typedef struct // Written to depending on sa_ShaderOutput
+	{
+		sa_ShaderStats Stats;
+		char* ISA;
+		char* RegisterAnalysis;
+	} sa_ShaderOutput;
 
-void sa_setRGAPath(char const* rgaPath);
-sa_ShaderOutput sa_spirVShaderOutput(sa_SpirVShaderDesc desc, sa_ShaderOutputType outputType);
-void sa_freeShaderOutput(sa_ShaderOutput output);
+	void sa_setRGAPath(char const* rgaPath);
+	sa_ShaderOutput sa_spirVShaderOutput(sa_SpirVShaderDesc desc, sa_ShaderOutputType outputType);
+	void sa_freeShaderOutput(sa_ShaderOutput output);
 
 #ifdef __cplusplus
 } // extern "C"
@@ -64,27 +64,27 @@ static void win32RunProcess(std::string const& commandLine, HANDLE outputStream 
 {
 	std::string tempStorage = commandLine;
 
-    PROCESS_INFORMATION processInformation{};
-    STARTUPINFOA startupInfo{};
-    startupInfo.cb = sizeof(startupInfo);
+	PROCESS_INFORMATION processInformation{};
+	STARTUPINFOA startupInfo{};
+	startupInfo.cb = sizeof(startupInfo);
 	startupInfo.hStdOutput = outputStream;
 	startupInfo.dwFlags |= STARTF_USESTDHANDLES;
 
-    // The target process will be created in session of the
-    // provider host process. If the provider was hosted in
-    // wmiprvse.exe process, the target process will be launched
-    // in session 0 and UI is invisible to the logged on user,
-    // but the process can be found through task manager.
-    BOOL creationResult = CreateProcessA(
-        NULL,                   // Command line + module name
-        &tempStorage[0],        // Command line
-        NULL,                   // Process handle not inheritable
-        NULL,                   // Thread handle not inheritable
-        TRUE,                  // Set handle inheritance to FALSE
-        NORMAL_PRIORITY_CLASS | CREATE_NO_WINDOW,  // creation flags
-        NULL,                   // Use parent's environment block
-        NULL,                   // Use parent's starting directory 
-        &startupInfo,           // Pointer to STARTUPINFO structure
+	// The target process will be created in session of the
+	// provider host process. If the provider was hosted in
+	// wmiprvse.exe process, the target process will be launched
+	// in session 0 and UI is invisible to the logged on user,
+	// but the process can be found through task manager.
+	BOOL creationResult = CreateProcessA(
+		NULL,                   // Command line + module name
+		&tempStorage[0],        // Command line
+		NULL,                   // Process handle not inheritable
+		NULL,                   // Thread handle not inheritable
+		TRUE,                  // Set handle inheritance to FALSE
+		NORMAL_PRIORITY_CLASS | CREATE_NO_WINDOW,  // creation flags
+		NULL,                   // Use parent's environment block
+		NULL,                   // Use parent's starting directory 
+		&startupInfo,           // Pointer to STARTUPINFO structure
 		&processInformation);   // Pointer to PROCESS_INFORMATION structure
 
 	if (creationResult == TRUE)
@@ -108,33 +108,33 @@ static char const* const ShaderNames[sa_ShaderType_Count] =
 
 void sa_setRGAPath(char const* rgaPath)
 {
-    RGAPath = rgaPath;
+	RGAPath = rgaPath;
 }
 
 sa_ShaderOutput sa_spirVShaderOutput(sa_SpirVShaderDesc desc, sa_ShaderOutputType outputType)
 {
 	// Prep filesystem
-    {
-        std::error_code errorCode;
-        std::filesystem::create_directory("temp", errorCode);
-    }
+	{
+		std::error_code errorCode;
+		std::filesystem::create_directory("temp", errorCode);
+	}
 
-    char const* shaderName = ShaderNames[desc.Type];
+	char const* shaderName = ShaderNames[desc.Type];
 
-    // Write out our temp file
-    {
-        std::ofstream spirvFile{TempSpirvFilePath, std::ios::binary};
-        spirvFile.write(desc.Binary, desc.BinarySize);
-        spirvFile.close();
-    }
+	// Write out our temp file
+	{
+		std::ofstream spirvFile { TempSpirvFilePath, std::ios::binary };
+		spirvFile.write(desc.Binary, desc.BinarySize);
+		spirvFile.close();
+	}
 
-    // Run RGA
-	if((outputType & (sa_ShaderOutputType_Stats | sa_ShaderOutputType_RegisterAnalysis)) != 0)
-    {
-        std::stringstream processCommandLine;
-        processCommandLine << RGAPath << "rga.exe ";
-        processCommandLine << "-s vk-offline ";
-        processCommandLine << "-c " << GPU << " ";
+	// Run RGA
+	if ((outputType & (sa_ShaderOutputType_Stats | sa_ShaderOutputType_RegisterAnalysis)) != 0)
+	{
+		std::stringstream processCommandLine;
+		processCommandLine << RGAPath << "rga.exe ";
+		processCommandLine << "-s vk-offline ";
+		processCommandLine << "-c " << GPU << " ";
 
 		if ((outputType & sa_ShaderOutputType_Stats) != 0)
 		{
@@ -146,14 +146,14 @@ sa_ShaderOutput sa_spirVShaderOutput(sa_SpirVShaderDesc desc, sa_ShaderOutputTyp
 			processCommandLine << "--livereg temp/temp_register_analysis.txt ";
 		}
 
-        processCommandLine << "--" << shaderName << " " << TempSpirvFilePath << " ";
+		processCommandLine << "--" << shaderName << " " << TempSpirvFilePath << " ";
 
-        win32RunProcess(processCommandLine.str());
-    }
+		win32RunProcess(processCommandLine.str());
+	}
 
 	sa_ShaderOutput output = {};
 
-	if((outputType & sa_ShaderOutputType_Stats) != 0)
+	if ((outputType & sa_ShaderOutputType_Stats) != 0)
 	{
 		// Read analysis file i.e CSV for dummies
 		sa_ShaderStats stats = {};
@@ -212,12 +212,12 @@ sa_ShaderOutput sa_spirVShaderOutput(sa_SpirVShaderDesc desc, sa_ShaderOutputTyp
 
 		char const* const tempLLVMObjDumpOutputPath = "temp/temp_dissassembly.txt";
 		HANDLE disassemblyOutput = CreateFileA(tempLLVMObjDumpOutputPath,
-		                         FILE_APPEND_DATA,
-		                         FILE_SHARE_WRITE | FILE_SHARE_READ,
-		                          &securityAttributes,
-		                         CREATE_ALWAYS,
-		                         FILE_ATTRIBUTE_NORMAL,
-		                         NULL);
+		                                       FILE_APPEND_DATA,
+		                                       FILE_SHARE_WRITE | FILE_SHARE_READ,
+		                                       &securityAttributes,
+		                                       CREATE_ALWAYS,
+		                                       FILE_ATTRIBUTE_NORMAL,
+		                                       NULL);
 
 		std::stringstream llvmObjDumpCommandLine;
 		llvmObjDumpCommandLine << "\"" << RGAPath << "utils/lc/opencl/bin/llvm-objdump.exe" << "\" ";
@@ -274,12 +274,12 @@ sa_ShaderOutput sa_spirVShaderOutput(sa_SpirVShaderDesc desc, sa_ShaderOutputTyp
 		std::filesystem::remove("temp", errorCode);
 	}
 
-    return output;
+	return output;
 }
 
 void sa_freeShaderOutput(sa_ShaderOutput output)
 {
-    free(output.ISA);
+	free(output.ISA);
 	free(output.RegisterAnalysis);
 }
 
