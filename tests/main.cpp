@@ -17,7 +17,7 @@ int main()
             buffer.data(),
             buffer.size(),
             sa_ShaderType_Pixel
-        }, sa_ShaderOutputType_ISA);
+        }, sa_ShaderOutputType_ISA | sa_ShaderOutputType_RegisterAnalysis | sa_ShaderOutputType_Stats);
 
     printf("%s", output.ISA);
     printf("%s", output.RegisterAnalysis);
