@@ -129,6 +129,7 @@ sa_ShaderOutput sa_spirVShaderOutput(sa_SpirVShaderDesc desc, sa_ShaderOutputTyp
     }
 
     // Run RGA
+	if((outputType & (sa_ShaderOutputType_Stats | sa_ShaderOutputType_RegisterAnalysis)) != 0)
     {
         std::stringstream processCommandLine;
         processCommandLine << RGAPath << "rga.exe ";
