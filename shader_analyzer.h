@@ -18,6 +18,7 @@ extern "C" {
 	{
 		char const* Binary;
 		size_t BinarySize;
+		char const* BinaryFilePath;
 		sa_ShaderType Type;
 	} sa_SpirVShaderDesc;
 
@@ -122,10 +123,20 @@ sa_ShaderOutput sa_spirVShaderOutput(sa_SpirVShaderDesc desc, sa_ShaderOutputTyp
 	char const* shaderName = ShaderNames[desc.Type];
 
 	// Write out our temp file
+	char const* spirvFilePath = "";
+
+	// If both a binary path and data are specified, prefer the file path.
+	if (desc.BinaryFilePath != nullptr)
+	{
+		spirvFilePath = desc.BinaryFilePath;
+	}
+	else if(desc.Binary != nullptr)
 	{
 		std::ofstream spirvFile { TempSpirvFilePath, std::ios::binary };
 		spirvFile.write(desc.Binary, desc.BinarySize);
 		spirvFile.close();
+
+		spirvFilePath = TempSpirvFilePath;
 	}
 
 	// Run RGA
@@ -146,7 +157,7 @@ sa_ShaderOutput sa_spirVShaderOutput(sa_SpirVShaderDesc desc, sa_ShaderOutputTyp
 			processCommandLine << "--livereg temp/temp_register_analysis.txt ";
 		}
 
-		processCommandLine << "--" << shaderName << " " << TempSpirvFilePath << " ";
+		processCommandLine << "--" << shaderName << " " << spirvFilePath << " ";
 
 		win32RunProcess(processCommandLine.str());
 	}
@@ -202,7 +213,7 @@ sa_ShaderOutput sa_spirVShaderOutput(sa_SpirVShaderDesc desc, sa_ShaderOutputTyp
 		amdllpcCommandLine << "-o=\"" << tempCompilationBinaryPath << "\" ";
 		amdllpcCommandLine << "--gfxip=" << AMDLLPCGPU << " ";
 		amdllpcCommandLine << "-trim-debug-info=false ";
-		amdllpcCommandLine << TempSpirvFilePath << " ";
+		amdllpcCommandLine << spirvFilePath << " ";
 		win32RunProcess(amdllpcCommandLine.str());
 
 		SECURITY_ATTRIBUTES securityAttributes = {};
