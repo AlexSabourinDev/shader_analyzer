@@ -19,6 +19,8 @@ extern "C" {
 		char const* Binary;
 		size_t BinarySize;
 		char const* BinaryFilePath;
+		char const* HLSLFilePath;
+		char const* HLSLEntryPoint;
 		sa_ShaderType Type;
 	} sa_SpirVShaderDesc;
 
@@ -43,6 +45,7 @@ extern "C" {
 	} sa_ShaderOutput;
 
 	void sa_setRGAPath(char const* rgaPath);
+	void sa_setDXCPath(char const* dxcPath);
 	sa_ShaderOutput sa_spirVShaderOutput(sa_SpirVShaderDesc desc, sa_ShaderOutputType outputType);
 	void sa_freeShaderOutput(sa_ShaderOutput output);
 
@@ -60,6 +63,7 @@ extern "C" {
 #include <sstream>
 #include <fstream>
 #include <filesystem>
+#define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 static void win32RunProcess(std::string const& commandLine, HANDLE outputStream = NULL)
 {
@@ -95,7 +99,10 @@ static void win32RunProcess(std::string const& commandLine, HANDLE outputStream 
 	}
 }
 
-static char const* RGAPath = "rga/rga.exe";
+// DXC Support
+
+static char const* RGAPath = "rga/";
+static char const* DXCPath = "dxc/";
 static char const* const TempSpirvFilePath = "temp/temp_shader.spv";
 static char const* const GPU = "gfx1030";
 static char const* const AMDLLPCGPU = "10.3.0";
@@ -112,6 +119,11 @@ void sa_setRGAPath(char const* rgaPath)
 	RGAPath = rgaPath;
 }
 
+void sa_setDXCPath(char const* dxcPath)
+{
+	DXCPath = dxcPath;
+}
+
 sa_ShaderOutput sa_spirVShaderOutput(sa_SpirVShaderDesc desc, sa_ShaderOutputType outputType)
 {
 	// Prep filesystem
@@ -125,8 +137,37 @@ sa_ShaderOutput sa_spirVShaderOutput(sa_SpirVShaderDesc desc, sa_ShaderOutputTyp
 	// Write out our temp file
 	char const* spirvFilePath = "";
 
-	// If both a binary path and data are specified, prefer the file path.
-	if (desc.BinaryFilePath != nullptr)
+	// If both a binary path and data are specified, prefer the file paths.
+	if (desc.HLSLFilePath != nullptr)
+	{
+		static char const* const dxcShaderNames[sa_ShaderType_Count] =
+		{
+			"vs_6_6",
+			"ps_6_6",
+			"cs_6_6"
+		};
+
+		// Compile with DXC
+		std::stringstream processCommandLine;
+		processCommandLine << DXCPath << "dxc.exe ";
+		processCommandLine << "-spirv ";
+		processCommandLine << "-T " << dxcShaderNames[desc.Type] << " ";
+		processCommandLine << "-E " << desc.HLSLEntryPoint << " ";
+		processCommandLine << "-fspv-target-env=vulkan1.3 ";
+		processCommandLine << "-WX ";
+		processCommandLine << "-O3 ";
+		processCommandLine << "-Zi ";
+		processCommandLine << "-enable-16bit-types ";
+		processCommandLine << "-HV 2021 ";
+		processCommandLine << "-Zpr ";
+		processCommandLine << "-Fo " << TempSpirvFilePath << " ";
+		processCommandLine << desc.HLSLFilePath;
+
+		win32RunProcess(processCommandLine.str());
+
+		spirvFilePath = TempSpirvFilePath;
+	}
+	else if (desc.BinaryFilePath != nullptr)
 	{
 		spirvFilePath = desc.BinaryFilePath;
 	}
