@@ -3,8 +3,8 @@
 
 int main(int argc, char* argv[])
 {
-	sa_setRGAPath("/rga/");
-	sa_setDXCPath("/dxc/");
+	sa_setRGAPath("rga/");
+	sa_setDXCPath("dxc/");
 
 	char const* filePath = "";
 	char const* entryPoint = "";
