@@ -22,6 +22,7 @@ extern "C" {
 		char const* HLSLFilePath;
 		char const* HLSLEntryPoint;
 		sa_ShaderType Type;
+		bool DisableHLSLOptimizations;
 	} sa_SpirVShaderDesc;
 
 	typedef struct
@@ -49,6 +50,8 @@ extern "C" {
 	sa_ShaderOutput sa_spirVShaderOutput(sa_SpirVShaderDesc desc, sa_ShaderOutputType outputType);
 	void sa_freeShaderOutput(sa_ShaderOutput output);
 
+	void sa_echo(bool echo);
+
 #ifdef __cplusplus
 } // extern "C"
 #endif // __cplusplus
@@ -60,6 +63,12 @@ extern "C" {
 #ifndef SHADER_ANALYZER_IMPL_H
 #define SHADER_ANALYZER_IMPL_H
 
+bool ShouldEcho = false;
+void sa_echo(bool echo)
+{
+	ShouldEcho = echo;
+}
+
 #include <sstream>
 #include <fstream>
 #include <filesystem>
@@ -68,6 +77,10 @@ extern "C" {
 static void win32RunProcess(std::string const& commandLine, HANDLE outputStream = NULL)
 {
 	std::string tempStorage = commandLine;
+	if(ShouldEcho)
+	{
+		printf("%s\n", tempStorage.c_str());
+	}
 
 	PROCESS_INFORMATION processInformation{};
 	STARTUPINFOA startupInfo{};
@@ -155,11 +168,12 @@ sa_ShaderOutput sa_spirVShaderOutput(sa_SpirVShaderDesc desc, sa_ShaderOutputTyp
 		processCommandLine << "-E " << desc.HLSLEntryPoint << " ";
 		processCommandLine << "-fspv-target-env=vulkan1.3 ";
 		processCommandLine << "-WX ";
-		processCommandLine << "-O3 ";
+		processCommandLine << (!desc.DisableHLSLOptimizations ? "-O3 " : "-O0 ");
 		processCommandLine << "-Zi ";
 		processCommandLine << "-enable-16bit-types ";
 		processCommandLine << "-HV 2021 ";
 		processCommandLine << "-Zpr ";
+		processCommandLine << "-Qembed_debug ";
 		processCommandLine << "-Fo " << TempSpirvFilePath << " ";
 		processCommandLine << desc.HLSLFilePath;
 

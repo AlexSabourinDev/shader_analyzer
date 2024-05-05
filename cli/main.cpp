@@ -12,6 +12,7 @@ int main(int argc, char* argv[])
 	sa_ShaderOutputType outputType = sa_ShaderOutputType_ISA;
 
 	bool printHelp = false;
+	bool disableOptimizations = false;
 
 	for(int i = 0; i < argc; i++)
 	{
@@ -49,6 +50,14 @@ int main(int argc, char* argv[])
 		{
 			outputType |= sa_ShaderOutputType_RegisterAnalysis;
 		}
+		else if(_stricmp(argv[i], "-v") == 0)
+		{
+			sa_echo(true);
+		}
+		else if(_stricmp(argv[i], "-O0") == 0)
+		{
+			disableOptimizations = true;
+		}
 	}
 
 	if(printHelp)
@@ -72,6 +81,7 @@ int main(int argc, char* argv[])
 	desc.HLSLFilePath = filePath;
 	desc.HLSLEntryPoint = entryPoint;
 	desc.Type = shaderType;
+	desc.DisableHLSLOptimizations = disableOptimizations;
 
     sa_ShaderOutput output = sa_spirVShaderOutput(desc, outputType);
 
